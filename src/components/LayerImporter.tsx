@@ -9,7 +9,16 @@ import { createPortal } from "react-dom";
 import type { WorkBook } from "xlsx";
 import type { GisFeature } from "../types/gis";
 import { CUSTOM_LAYER_PALETTE } from "../constants/layers";
-import { buildPointFeatures, loadWorkbook, readSheet } from "../utils/xlsx";
+import {
+  buildCircleFeatures,
+  buildMixedFeatures,
+  buildPointFeatures,
+  buildWktFeatures,
+  loadWorkbook,
+  readSheet,
+  type ImportGeometryKind,
+  type ParsedSheet,
+} from "../utils/xlsx";
 
 type ImportPayload = {
   name: string;
@@ -26,7 +35,10 @@ interface Props {
   onImport: (payload: ImportPayload) => { ok: boolean; message?: string };
 }
 
+type GeometryKind = Exclude<ImportGeometryKind, "unknown">;
+
 const defaultColor = CUSTOM_LAYER_PALETTE[5] || CUSTOM_LAYER_PALETTE[0];
+const templateHref = "/templates/layer-geometries-template.xlsx";
 
 export function LayerImporter({
   open,
@@ -42,8 +54,14 @@ export function LayerImporter({
   const [selectedSheet, setSelectedSheet] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [geometryKind, setGeometryKind] = useState<GeometryKind>("point");
+  const [detectedGeometryKind, setDetectedGeometryKind] =
+    useState<ImportGeometryKind>("unknown");
   const [latitudeColumn, setLatitudeColumn] = useState("");
   const [longitudeColumn, setLongitudeColumn] = useState("");
+  const [wktColumn, setWktColumn] = useState("");
+  const [radiusColumn, setRadiusColumn] = useState("");
+  const [geometryTypeColumn, setGeometryTypeColumn] = useState("");
   const [nameColumn, setNameColumn] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,8 +77,13 @@ export function LayerImporter({
     setSelectedSheet("");
     setHeaders([]);
     setRows([]);
+    setGeometryKind("point");
+    setDetectedGeometryKind("unknown");
     setLatitudeColumn("");
     setLongitudeColumn("");
+    setWktColumn("");
+    setRadiusColumn("");
+    setGeometryTypeColumn("");
     setNameColumn("");
     setBusy(false);
     setError(null);
@@ -70,12 +93,18 @@ export function LayerImporter({
 
   const applySheet = (workbook: WorkBook, sheetName: string) => {
     const parsed = readSheet(workbook, sheetName);
+    const initialGeometryKind = getInitialGeometryKind(parsed);
 
     setSelectedSheet(sheetName);
     setHeaders(parsed.headers);
     setRows(parsed.rows);
+    setDetectedGeometryKind(parsed.suggestedGeometryKind);
+    setGeometryKind(initialGeometryKind);
     setLatitudeColumn(parsed.suggestedLatitudeColumn || "");
     setLongitudeColumn(parsed.suggestedLongitudeColumn || "");
+    setWktColumn(parsed.suggestedWktColumn || "");
+    setRadiusColumn(parsed.suggestedRadiusColumn || "");
+    setGeometryTypeColumn(parsed.suggestedGeometryTypeColumn || "");
     setNameColumn(parsed.suggestedNameColumn || "");
 
     if (!parsed.rows.length) {
@@ -83,8 +112,10 @@ export function LayerImporter({
       return;
     }
 
-    if (!parsed.suggestedLatitudeColumn || !parsed.suggestedLongitudeColumn) {
-      setError("ستون‌های طول و عرض جغرافیایی را از لیست پایین مشخص کنید.");
+    if (parsed.suggestedGeometryKind === "unknown") {
+      setError(
+        "نوع هندسه به صورت خودکار تشخیص داده نشد؛ از پایین نوع و ستون‌ها را مشخص کنید.",
+      );
       return;
     }
 
@@ -114,8 +145,13 @@ export function LayerImporter({
       setHeaders([]);
       setRows([]);
       setSelectedSheet("");
+      setGeometryKind("point");
+      setDetectedGeometryKind("unknown");
       setLatitudeColumn("");
       setLongitudeColumn("");
+      setWktColumn("");
+      setRadiusColumn("");
+      setGeometryTypeColumn("");
       setNameColumn("");
       setError(
         err instanceof Error ? err.message : "خواندن فایل Excel ناموفق بود.",
@@ -150,21 +186,70 @@ export function LayerImporter({
       return;
     }
 
-    if (!latitudeColumn || !longitudeColumn) {
-      setError("ستون‌های مختصات را مشخص کنید.");
-      return;
+    let result;
+
+    if (geometryKind === "mixed") {
+      if (!geometryTypeColumn) {
+        setError("در حالت ترکیبی باید ستون نوع هندسه را مشخص کنید.");
+        return;
+      }
+
+      result = buildMixedFeatures({
+        rows,
+        geometryTypeColumn,
+        latitudeColumn: latitudeColumn || undefined,
+        longitudeColumn: longitudeColumn || undefined,
+        wktColumn: wktColumn || undefined,
+        radiusColumn: radiusColumn || undefined,
+        nameColumn: nameColumn || undefined,
+        layerName: normalizedName,
+      });
+    } else if (geometryKind === "point") {
+      if (!latitudeColumn || !longitudeColumn) {
+        setError("ستون‌های عرض و طول جغرافیایی را مشخص کنید.");
+        return;
+      }
+
+      result = buildPointFeatures({
+        rows,
+        latitudeColumn,
+        longitudeColumn,
+        nameColumn: nameColumn || undefined,
+        layerName: normalizedName,
+      });
+    } else if (geometryKind === "circle") {
+      if (!latitudeColumn || !longitudeColumn || !radiusColumn) {
+        setError("برای دایره باید ستون‌های مرکز و شعاع را مشخص کنید.");
+        return;
+      }
+
+      result = buildCircleFeatures({
+        rows,
+        latitudeColumn,
+        longitudeColumn,
+        radiusColumn,
+        nameColumn: nameColumn || undefined,
+        layerName: normalizedName,
+      });
+    } else {
+      if (!wktColumn) {
+        setError("ستون WKT را مشخص کنید.");
+        return;
+      }
+
+      result = buildWktFeatures({
+        rows,
+        wktColumn,
+        nameColumn: nameColumn || undefined,
+        layerName: normalizedName,
+        geometryKind,
+      });
     }
 
-    const result = buildPointFeatures({
-      rows,
-      latitudeColumn,
-      longitudeColumn,
-      nameColumn: nameColumn || undefined,
-      layerName: normalizedName,
-    });
-
     if (!result.features.length) {
-      setError("هیچ نقطه معتبری برای نمایش روی نقشه پیدا نشد.");
+      setError(
+        `هیچ ${getGeometryLabel(geometryKind)} معتبری برای نمایش روی نقشه پیدا نشد.`,
+      );
       return;
     }
 
@@ -186,6 +271,13 @@ export function LayerImporter({
     if (event.key === "Escape") onClose();
   };
 
+  const showCoordinateSelectors =
+    geometryKind === "point" || geometryKind === "circle" || geometryKind === "mixed";
+  const showWktSelector =
+    geometryKind === "line" || geometryKind === "polygon" || geometryKind === "mixed";
+  const showRadiusSelector =
+    geometryKind === "circle" || geometryKind === "mixed";
+
   const modal = (
     <div
       dir="rtl"
@@ -200,8 +292,9 @@ export function LayerImporter({
 
       <div
         className="relative bg-nord-sidebar border border-nord-border rounded-2xl p-6
-                   w-[420px] max-w-[calc(100vw-2rem)] shadow-[0_20px_60px_rgba(0,0,0,0.15)]
-                   flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200"
+                   w-[460px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto
+                   shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col gap-4
+                   animate-in fade-in zoom-in-95 duration-200"
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -245,13 +338,39 @@ export function LayerImporter({
               ورود لایه از Excel
             </h3>
             <p className="text-xs text-nord-dim mt-0.5">
-              فایل بايد شامل نقاط با ستون‌های طول و عرض جغرافيايی باشد
+              می‌توانید همه هندسه‌ها را در یک شیت با ستون نوع هندسه وارد کنید
             </p>
           </div>
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-nord-dim">فایل Excel</label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-xs text-nord-dim">فایل Excel</label>
+            <a
+              href={templateHref}
+              download
+              className="inline-flex items-center gap-1.5 rounded-lg border border-nord-border
+                         px-2.5 py-1.5 text-[11px] text-nord-dim hover:border-nord-frost2
+                         hover:text-nord-frost2 hover:bg-nord-frost4/5 transition-all duration-200"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v12" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+              دانلود قالب
+            </a>
+          </div>
+
           <label
             className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl
                        border border-dashed border-nord-border bg-nord-card/35
@@ -265,9 +384,7 @@ export function LayerImporter({
               onChange={handleFileChange}
               disabled={busy}
             />
-            <span className="truncate">
-              {fileName || "انتخاب فایل .xlsx"}
-            </span>
+            <span className="truncate">{fileName || "انتخاب فایل .xlsx"}</span>
             <span className="text-xs text-nord-frost3">
               {busy ? "در حال خواندن..." : "مرور"}
             </span>
@@ -283,7 +400,7 @@ export function LayerImporter({
               setLayerName(event.target.value);
               if (error) setError(null);
             }}
-            placeholder="مثلاً: شعب فروش"
+            placeholder="مثلاً: لایه ترکیبی"
             className="w-full text-sm"
           />
         </div>
@@ -319,7 +436,8 @@ export function LayerImporter({
                     }`}
                     style={{
                       backgroundColor: tone,
-                      boxShadow: color === tone ? `0 4px 12px ${tone}40` : undefined,
+                      boxShadow:
+                        color === tone ? `0 4px 12px ${tone}40` : undefined,
                     }}
                     aria-label={`انتخاب رنگ ${tone}`}
                   />
@@ -331,48 +449,151 @@ export function LayerImporter({
 
         {headers.length > 0 && (
           <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-nord-dim">ستون عرض</label>
-                <select
-                  value={latitudeColumn}
-                  onChange={(event) => {
-                    setLatitudeColumn(event.target.value);
-                    if (event.target.value && longitudeColumn) setError(null);
-                  }}
-                  className="text-sm"
-                >
-                  <option value="">انتخاب ستون...</option>
-                  {headers.map((header) => (
-                    <option key={header} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-nord-dim">ستون طول</label>
-                <select
-                  value={longitudeColumn}
-                  onChange={(event) => {
-                    setLongitudeColumn(event.target.value);
-                    if (event.target.value && latitudeColumn) setError(null);
-                  }}
-                  className="text-sm"
-                >
-                  <option value="">انتخاب ستون...</option>
-                  {headers.map((header) => (
-                    <option key={header} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-nord-dim">حالت ورود</label>
+              <select
+                value={geometryKind}
+                onChange={(event) => {
+                  setGeometryKind(event.target.value as GeometryKind);
+                  if (error) setError(null);
+                }}
+                className="text-sm"
+              >
+                <option value="mixed">ترکیبی با ستون نوع هندسه</option>
+                <option value="point">فقط نقطه</option>
+                <option value="line">فقط خط</option>
+                <option value="polygon">فقط چندضلعی</option>
+                <option value="circle">فقط دایره</option>
+              </select>
             </div>
 
+            {geometryKind === "mixed" && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-nord-dim">ستون نوع هندسه</label>
+                <select
+                  value={geometryTypeColumn}
+                  onChange={(event) => {
+                    setGeometryTypeColumn(event.target.value);
+                    if (error) setError(null);
+                  }}
+                  className="text-sm"
+                >
+                  <option value="">انتخاب ستون...</option>
+                  {headers.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {showCoordinateSelectors && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-nord-dim">
+                    {geometryKind === "circle"
+                      ? "ستون عرض مرکز"
+                      : geometryKind === "mixed"
+                        ? "ستون عرض/عرض مرکز"
+                        : "ستون عرض"}
+                  </label>
+                  <select
+                    value={latitudeColumn}
+                    onChange={(event) => {
+                      setLatitudeColumn(event.target.value);
+                      if (error) setError(null);
+                    }}
+                    className="text-sm"
+                  >
+                    <option value="">انتخاب ستون...</option>
+                    {headers.map((header) => (
+                      <option key={header} value={header}>
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-nord-dim">
+                    {geometryKind === "circle"
+                      ? "ستون طول مرکز"
+                      : geometryKind === "mixed"
+                        ? "ستون طول/طول مرکز"
+                        : "ستون طول"}
+                  </label>
+                  <select
+                    value={longitudeColumn}
+                    onChange={(event) => {
+                      setLongitudeColumn(event.target.value);
+                      if (error) setError(null);
+                    }}
+                    className="text-sm"
+                  >
+                    <option value="">انتخاب ستون...</option>
+                    {headers.map((header) => (
+                      <option key={header} value={header}>
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {showWktSelector && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-nord-dim">
+                  {geometryKind === "mixed"
+                    ? "ستون WKT برای خط/چندضلعی"
+                    : "ستون WKT"}
+                </label>
+                <select
+                  value={wktColumn}
+                  onChange={(event) => {
+                    setWktColumn(event.target.value);
+                    if (error) setError(null);
+                  }}
+                  className="text-sm"
+                >
+                  <option value="">انتخاب ستون...</option>
+                  {headers.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {showRadiusSelector && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-nord-dim">
+                  {geometryKind === "mixed"
+                    ? "ستون شعاع برای دایره (متر)"
+                    : "ستون شعاع (متر)"}
+                </label>
+                <select
+                  value={radiusColumn}
+                  onChange={(event) => {
+                    setRadiusColumn(event.target.value);
+                    if (error) setError(null);
+                  }}
+                  className="text-sm"
+                >
+                  <option value="">انتخاب ستون...</option>
+                  {headers.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-nord-dim">ستون نام (اختياری)</label>
+              <label className="text-xs text-nord-dim">ستون نام (اختیاری)</label>
               <select
                 value={nameColumn}
                 onChange={(event) => {
@@ -392,6 +613,16 @@ export function LayerImporter({
 
             <div className="rounded-xl border border-nord-border/60 bg-nord-card/50 px-3 py-2.5 text-xs text-nord-dim">
               <div className="flex items-center justify-between gap-3">
+                <span>تشخیص خودکار</span>
+                <span className="text-nord-text">
+                  {getGeometryLabel(detectedGeometryKind)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 mt-1.5">
+                <span>حالت انتخاب‌شده</span>
+                <span className="text-nord-text">{getGeometryLabel(geometryKind)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 mt-1.5">
                 <span>ردیف‌های خوانده‌شده</span>
                 <span className="text-nord-text tabular-nums">{rows.length}</span>
               </div>
@@ -400,7 +631,16 @@ export function LayerImporter({
                 <span className="text-nord-text tabular-nums">{headers.length}</span>
               </div>
               <p className="mt-2 leading-relaxed text-[11px]">
-                برای نمايش روی نقشه، مختصات بايد بر اساس WGS84 و در بازه طول/عرض جغرافيايی معمول باشد.
+                {geometryKind === "mixed" &&
+                  "در حالت ترکیبی، هر ردیف با مقدار ستون نوع هندسه مثل point، line، polygon یا circle تفسیر می‌شود. point و circle از مختصات، line و polygon از WKT استفاده می‌کنند."}
+                {geometryKind === "point" &&
+                  "برای نقطه، مختصات باید بر اساس WGS84 و به صورت عرض/طول جغرافیایی باشند."}
+                {geometryKind === "line" &&
+                  "برای خط از WKT با فرمت LINESTRING(...) استفاده کنید و در هر جفت مختصات، ابتدا طول سپس عرض را بنویسید."}
+                {geometryKind === "polygon" &&
+                  "برای چندضلعی از WKT با فرمت POLYGON((...)) استفاده کنید و حلقه بیرونی را بسته نگه دارید."}
+                {geometryKind === "circle" &&
+                  "برای دایره، مرکز را با عرض/طول جغرافیایی و شعاع را به متر وارد کنید. دایره در فرانت‌اند با Point + radius رندر می‌شود."}
               </p>
             </div>
           </>
@@ -454,4 +694,24 @@ export function LayerImporter({
 
 function getLayerNameFromFile(fileName: string) {
   return fileName.replace(/\.[^.]+$/, "").trim() || "لایه واردشده";
+}
+
+function getInitialGeometryKind(parsed: ParsedSheet): GeometryKind {
+  if (parsed.suggestedGeometryKind !== "unknown") {
+    return parsed.suggestedGeometryKind;
+  }
+
+  if (parsed.suggestedGeometryTypeColumn) return "mixed";
+  if (parsed.suggestedRadiusColumn) return "circle";
+  if (parsed.suggestedWktColumn) return "line";
+  return "point";
+}
+
+function getGeometryLabel(kind: ImportGeometryKind) {
+  if (kind === "mixed") return "ترکیبی";
+  if (kind === "point") return "نقطه";
+  if (kind === "line") return "خط";
+  if (kind === "polygon") return "چندضلعی";
+  if (kind === "circle") return "دایره";
+  return "نامشخص";
 }

@@ -15,6 +15,9 @@ export function FeatureInfo({ feature, onClose }: Props) {
     ([k]) => !['layer', 'custom_layer_id', 'custom_fields'].includes(k),
   )
   const customFieldRows = Object.entries(properties.custom_fields || {})
+  const featureLabel = properties.circle_radius_m
+    ? 'دایره'
+    : geometryLabel(geometryType)
 
   return (
     <div className="flex flex-col gap-2 p-4 border-t border-nord-border flex-shrink-0">
@@ -30,7 +33,7 @@ export function FeatureInfo({ feature, onClose }: Props) {
 
       <div className="bg-nord-card rounded-lg border border-nord-border overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-nord-border bg-nord-hover/30">
-          <span className="text-xs text-nord-frost2">{geometryLabel(geometryType)}</span>
+          <span className="text-xs text-nord-frost2">{featureLabel}</span>
         </div>
         <div className="divide-y divide-nord-border">
           {rows.map(([key, val]) => (

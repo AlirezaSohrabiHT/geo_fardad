@@ -38,6 +38,7 @@ export type FeatureProperties = {
   custom_layer_id?: string;
   custom_layer_name?: string;
   custom_fields?: Record<string, string>;
+  circle_radius_m?: number;
 };
 
 export type GisFeature = {
