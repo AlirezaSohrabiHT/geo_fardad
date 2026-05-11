@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Vazirmatn', sans-serif;
+
+  /* Light palette (same variable names) */
+  --color-nord-bg: #f0f4f8;
+  --color-nord-sidebar: #ffffff;
+  --color-nord-card: #e8edf2;
+  --color-nord-hover: #dce3eb;
+  --color-nord-border: #c5cdd7;
+  --color-nord-text: #2e3440;
+  --color-nord-muted: #4c566a;
+  --color-nord-dim: #7b8794;
+  --color-nord-frost1: #3b9b9a;
+  --color-nord-frost2: #2e8fa0;
+  --color-nord-frost3: #4a7ab5;
+  --color-nord-frost4: #3d6a99;
+  --color-nord-green: #5a9a3c;
+  --color-nord-yellow: #c49a2a;
+  --color-nord-orange: #c06a4a;
+  --color-nord-red: #bf3b44;
+  --color-nord-purple: #8e5a9e;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('./assets/Vazirmatn-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  body {
+    @apply bg-nord-bg text-nord-text font-sans m-0 p-0 overflow-hidden;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-nord-sidebar;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-nord-border rounded-full;
+  }
+
+  input, select, textarea {
+    @apply bg-nord-card border border-nord-border text-nord-text rounded-lg px-3 py-2
+           text-sm outline-none transition-all duration-200
+           focus:border-nord-frost2 focus:ring-1 focus:ring-nord-frost2/30;
+  }
+}
+
+/* Shake animation for validation feedback */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+
+.leaflet-control-zoom { direction: ltr; }
+.leaflet-draw-toolbar { direction: ltr; }
+.leaflet-popup-content {
+  direction: rtl;
+  font-family: 'Vazirmatn', sans-serif;
+}
