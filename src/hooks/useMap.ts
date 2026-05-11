@@ -215,6 +215,14 @@ export function useMap({
           fillOpacity: feature?.geometry.type === 'LineString' ? 0 : 0.2,
           weight: feature?.geometry.type === 'LineString' ? 3 : 2,
         }),
+        pointToLayer: (_feature, latlng) =>
+          L.circleMarker(latlng, {
+            radius: 6,
+            color: cl.color,
+            fillColor: cl.color,
+            fillOpacity: 0.85,
+            weight: 2,
+          }),
         onEachFeature: (feature, lyr) => {
           const props = feature.properties as GisFeature['properties']
           const geoType = feature.geometry.type as GisGeometry['type']

@@ -8,6 +8,7 @@ interface Props {
   onToggleCustom: (id: string) => void;
   onRemoveCustom: (id: string) => void;
   onOpenCreate: () => void;
+  onOpenImport: () => void;
 }
 
 const baseLayersMeta: { id: BaseLayerId; label: string; icon: string }[] = [
@@ -22,6 +23,7 @@ export function Toolbar({
   onToggleCustom,
   onRemoveCustom,
   onOpenCreate,
+  onOpenImport,
 }: Props) {
   const [hoveredCustom, setHoveredCustom] = useState<string | null>(null);
 
@@ -91,26 +93,52 @@ export function Toolbar({
           <div className="h-px flex-1 bg-nord-border/50" />
         </div>
 
-        <button
-          onClick={onOpenCreate}
-          className="flex items-center justify-center gap-2 w-full mt-1.5 px-3 py-2.5 rounded-xl
-                     border border-dashed border-nord-border text-sm text-nord-dim
-                     hover:border-nord-frost2 hover:text-nord-frost2 hover:bg-nord-frost4/5
-                     transition-all duration-200 cursor-pointer"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
+        <div className="grid grid-cols-2 gap-2 mt-1.5">
+          <button
+            onClick={onOpenCreate}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl
+                       border border-dashed border-nord-border text-sm text-nord-dim
+                       hover:border-nord-frost2 hover:text-nord-frost2 hover:bg-nord-frost4/5
+                       transition-all duration-200 cursor-pointer"
           >
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          ایجاد لایه جدید
-        </button>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            ایجاد لایه
+          </button>
+
+          <button
+            onClick={onOpenImport}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl
+                       border border-dashed border-nord-border text-sm text-nord-dim
+                       hover:border-nord-frost2 hover:text-nord-frost2 hover:bg-nord-frost4/5
+                       transition-all duration-200 cursor-pointer"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 3v12" />
+              <path d="M7 10l5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+            ورود Excel
+          </button>
+        </div>
 
         {customLayers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2.5">

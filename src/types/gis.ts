@@ -16,7 +16,16 @@ export type LineGeometry = {
   coordinates: number[][];
 };
 
-export type GisGeometry = PolygonGeometry | MultiPolygonGeometry | LineGeometry;
+export type PointGeometry = {
+  type: "Point";
+  coordinates: [number, number];
+};
+
+export type GisGeometry =
+  | PointGeometry
+  | PolygonGeometry
+  | MultiPolygonGeometry
+  | LineGeometry;
 
 export type FeatureProperties = {
   id: string;

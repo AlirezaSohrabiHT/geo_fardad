@@ -54,5 +54,7 @@ export function normalizePolygonCoordinates(value: unknown): number[][][] | null
 }
 
 export function geometryLabel(type: GisGeometry['type']): string {
-  return type === 'LineString' ? 'خط' : 'چندضلعی'
+  if (type === 'Point') return 'نقطه'
+  if (type === 'LineString') return 'خط'
+  return 'چندضلعی'
 }

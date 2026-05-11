@@ -10,8 +10,12 @@ import { Toolbar } from "./components/Toolbar";
 import { MapView } from "./components/MapView";
 import { FeatureInfo } from "./components/FeatureInfo";
 import { LayerCreator } from "./components/LayerCreator";
+import { LayerImporter } from "./components/LayerImporter";
 import { DrawingForm } from "./components/DrawingForm";
 import "./index.css";
+
+const createLayerId = () =>
+  `custom-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
 function App() {
   const [baseLayerActive, setBaseLayerActive] = useState<
@@ -30,6 +34,7 @@ function App() {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [layerCreatorOpen, setLayerCreatorOpen] = useState(false);
+  const [layerImporterOpen, setLayerImporterOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleDrawCreated = useCallback(
@@ -80,7 +85,7 @@ function App() {
       setFormError("لایه با این نام از قبل وجود دارد.");
       return;
     }
-    const id = `custom-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const id = createLayerId();
     setCustomLayers((prev) => [
       ...prev,
       { id, name, color, visible: true, features: [] },
@@ -89,6 +94,58 @@ function App() {
     setFormError(null);
     setLayerCreatorOpen(false);
   };
+
+  const handleImportLayer = useCallback(
+    (payload: {
+      name: string;
+      color: string;
+      features: GisFeature[];
+      skippedRowCount: number;
+      sourceFileName: string;
+    }) => {
+      const { name, color, features } = payload;
+
+      if (customLayers.some((layer) => layer.name === name)) {
+        return {
+          ok: false,
+          message: "لایه با این نام از قبل وجود دارد.",
+        };
+      }
+
+      const id = createLayerId();
+      const importedFeatures = features.map((feature, index) => ({
+        ...feature,
+        properties: {
+          ...feature.properties,
+          id: feature.properties.id || `custom-feature-${Date.now()}-${index}`,
+          custom_layer_id: id,
+          custom_layer_name: name,
+        },
+      }));
+
+      setCustomLayers((prev) => [
+        ...prev,
+        {
+          id,
+          name,
+          color,
+          visible: true,
+          features: importedFeatures,
+        },
+      ]);
+      setDrawingMeta((prev) => ({
+        ...prev,
+        targetLayerId: id,
+        featureName: "",
+        featureFields: "",
+      }));
+      setFormError(null);
+      setLayerImporterOpen(false);
+
+      return { ok: true };
+    },
+    [customLayers]
+  );
 
   return (
     <div dir="rtl" className="flex h-screen w-screen overflow-hidden bg-nord-bg">
@@ -107,6 +164,7 @@ function App() {
           onToggleCustom={handleToggleCustom}
           onRemoveCustom={handleRemoveCustom}
           onOpenCreate={() => setLayerCreatorOpen(true)}
+          onOpenImport={() => setLayerImporterOpen(true)}
         />
         <DrawingForm
           meta={drawingMeta}
@@ -229,6 +287,12 @@ function App() {
         open={layerCreatorOpen}
         onClose={() => setLayerCreatorOpen(false)}
         onCreate={handleCreateLayer}
+      />
+      <LayerImporter
+        open={layerImporterOpen}
+        existingLayerNames={customLayers.map((layer) => layer.name)}
+        onClose={() => setLayerImporterOpen(false)}
+        onImport={handleImportLayer}
       />
     </div>
   );

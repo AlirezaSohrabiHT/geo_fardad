@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { CUSTOM_LAYER_PALETTE } from "../constants/layers";
 
 interface Props {
   open: boolean;
@@ -7,10 +8,7 @@ interface Props {
   onCreate: (name: string, color: string) => void;
 }
 
-const palette = [
-  "#bf616a", "#d08770", "#ebcb8b", "#a3be8c", "#b48ead",
-  "#88c0d0", "#81a1c1", "#5e81ac", "#8fbcbb",
-];
+const palette = CUSTOM_LAYER_PALETTE;
 
 export function LayerCreator({ open, onClose, onCreate }: Props) {
   const [name, setName] = useState("");

@@ -1,4 +1,5 @@
 import type { SelectedFeature } from '../types/gis'
+import { geometryLabel } from '../utils/geometry'
 
 interface Props {
   feature: SelectedFeature
@@ -11,8 +12,9 @@ export function FeatureInfo({ feature, onClose }: Props) {
   const { properties, geometryType } = feature
 
   const rows = Object.entries(properties).filter(
-    ([k]) => !['layer', 'custom_layer_id'].includes(k),
+    ([k]) => !['layer', 'custom_layer_id', 'custom_fields'].includes(k),
   )
+  const customFieldRows = Object.entries(properties.custom_fields || {})
 
   return (
     <div className="flex flex-col gap-2 p-4 border-t border-nord-border flex-shrink-0">
@@ -28,7 +30,7 @@ export function FeatureInfo({ feature, onClose }: Props) {
 
       <div className="bg-nord-card rounded-lg border border-nord-border overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-nord-border bg-nord-hover/30">
-          <span className="text-xs text-nord-frost2">{geometryType}</span>
+          <span className="text-xs text-nord-frost2">{geometryLabel(geometryType)}</span>
         </div>
         <div className="divide-y divide-nord-border">
           {rows.map(([key, val]) => (
@@ -37,6 +39,21 @@ export function FeatureInfo({ feature, onClose }: Props) {
               <span className="text-nord-text truncate">{String(val ?? '—')}</span>
             </div>
           ))}
+          {customFieldRows.length > 0 && (
+            <div className="px-3 py-2">
+              <div className="text-[11px] text-nord-dim mb-2">فیلدهای فایل</div>
+              <div className="space-y-1.5">
+                {customFieldRows.map(([key, value]) => (
+                  <div key={key} className="flex items-center gap-3 text-xs">
+                    <span className="text-nord-dim w-24 flex-shrink-0 truncate">
+                      {key}
+                    </span>
+                    <span className="text-nord-text truncate">{value || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
